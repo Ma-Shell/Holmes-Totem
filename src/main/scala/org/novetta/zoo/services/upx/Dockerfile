@@ -2,7 +2,7 @@ FROM ubuntu:14.04
 
 # install what you need here
 RUN apt-get update && apt-get -y upgrade
-RUN apt-get install -y python-pip
+RUN apt-get install -y python-pip upx-ucl
 RUN pip install tornado pefile bitstring
 
 # add the files to the container
@@ -14,6 +14,7 @@ RUN useradd -s /bin/bash service
 RUN chown -R service /service
 
 USER service
+ADD service.conf /service
 WORKDIR /service
 
 EXPOSE 7725
