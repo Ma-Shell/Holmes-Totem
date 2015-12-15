@@ -4,6 +4,7 @@ import java.util.concurrent.{Executors, ExecutorService}
 
 import akka.actor.{ActorRef, ActorSystem, Props}
 import org.novetta.zoo.actors._
+import org.novetta.zoo.services.upx.{UPXSuccess, UPXWork}
 import org.novetta.zoo.services.peinfo.{PEInfoSuccess, PEInfoWork}
 import org.novetta.zoo.services.virustotal.{VTSampleSuccess, VTSampleWork}
 import org.novetta.zoo.services.yara.{YaraSuccess, YaraWork}
@@ -69,6 +70,7 @@ object driver extends App with Instrumented {
         case "PEINFO" => Random.shuffle(services.getOrElse("peinfo", List())).head
         case "VTSAMPLE" => Random.shuffle(services.getOrElse("vtsample", List())).head
         case "YARA" => Random.shuffle(services.getOrElse("yara", List())).head
+        case "UPX" => Random.shuffle(services.getOrElse("upx", List())).head
       }
     }
 
@@ -86,6 +88,9 @@ object driver extends App with Instrumented {
         case ("YARA", li: List[String]) =>
           YaraWork(key, filename, 60, "YARA", GeneratePartial("YARA"), li)
 
+        case ("UPX", li: List[String]) =>
+          UPXWork(key, filename, 60, "UPX", GeneratePartial("UPX"), li)
+
         case (s: String, li: List[String]) =>
           UnsupportedWork(key, filename, 1, s, GeneratePartial(s), li)
 
@@ -102,6 +107,7 @@ object driver extends App with Instrumented {
         case x: MetadataSuccess => "metadata.result.static.zoo"
         case x: VTSampleSuccess => "vtsample.result.static.zoo"
         case x: YaraSuccess => "yara.result.static.zoo"
+        case x: UPXSuccess => "upx.result.static.zoo"
       }
     }
   }
