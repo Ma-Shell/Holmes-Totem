@@ -4,10 +4,10 @@ import java.util.concurrent.{Executors, ExecutorService}
 
 import akka.actor.{ActorRef, ActorSystem, Props}
 import org.novetta.zoo.actors._
-import org.novetta.zoo.services.upx.{UPXSuccess, UPXWork}
 import org.novetta.zoo.services.peinfo.{PEInfoSuccess, PEInfoWork}
 import org.novetta.zoo.services.virustotal.{VTSampleSuccess, VTSampleWork}
 import org.novetta.zoo.services.yara.{YaraSuccess, YaraWork}
+import org.novetta.zoo.services.upx.{UPXSuccess, UPXWork}
 import org.novetta.zoo.services.{MetadataSuccess, MetadataWork}
 import org.novetta.zoo.types._
 
