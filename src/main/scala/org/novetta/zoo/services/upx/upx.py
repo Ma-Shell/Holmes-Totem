@@ -42,8 +42,8 @@ class TempAnalysisFile(object):
         Cleanup temporary file on disk.
         """
 
-        if os.path.isdir(self.directory):
-            shutil.rmtree(self.directory)
+        #if os.path.isdir(self.directory):
+            #shutil.rmtree(self.directory)
 
 def UPXRun(obj):
     retdata = []
@@ -106,7 +106,8 @@ class UPXProcess(tornado.web.RequestHandler):
             data = UPXRun(fullPath)
             if(data):
                 print(len(data))
-                self.write(data)
+                for f in data:
+                    self.write(f)
         except Exception as e:
             self.write({"error": traceback.format_exc(e)})
 
