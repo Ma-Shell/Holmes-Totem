@@ -55,7 +55,8 @@ def UPXRun(obj):
                     relationship=RelationshipTypes.PACKED_FROM,
                     user=self.current_task.username)
         # Filename is just the md5 of the data...
-        self._add_result("file_added", filename, {'md5': filename})
+        #self._add_result("file_added", filename, {'md5': filename})
+	data.append(filename)
 
     return data
 
