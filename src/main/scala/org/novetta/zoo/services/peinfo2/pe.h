@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "constants.h"
+
 typedef int16_t DOS_hdr_short;
 typedef uint16_t DOS_hdr_ptr;
 typedef uint32_t DOS_hdr_long;
@@ -128,4 +129,30 @@ struct PEOPTx64_hdr
 	PEOPTx64_qlong size_heap_commit;
 	PEOPTx64_long loader_flags;
 	PEOPTx64_long number_rva_and_sizes;
+};
+
+struct PEOPT_data_directory
+{
+	PEOPT_long virtual_address;
+	PEOPT_long size;
+};
+
+char* directory_entry_types[] = 
+{
+"IMAGE_DIRECTORY_ENTRY_EXPORT", 
+"IMAGE_DIRECTORY_ENTRY_IMPORT",
+"IMAGE_DIRECTORY_ENTRY_RESOURCE",
+"IMAGE_DIRECTORY_ENTRY_EXCEPTION",
+"IMAGE_DIRECTORY_ENTRY_SECURITY",
+"IMAGE_DIRECTORY_ENTRY_BASERELOC",
+"IMAGE_DIRECTORY_ENTRY_DEBUG",
+"IMAGE_DIRECTORY_ENTRY_COPYRIGHT",
+"IMAGE_DIRECTORY_ENTRY_GLOBALPTR",
+"IMAGE_DIRECTORY_ENTRY_TLS",
+"IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG",
+"IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT",
+"IMAGE_DIRECTORY_ENTRY_IAT",
+"IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT",
+"IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR",
+"IMAGE_DIRECTORY_ENTRY_RESERVED"
 };

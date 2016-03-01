@@ -61,13 +61,21 @@ void print_COFF_hdr(struct COFF_hdr* ch)
 void print_PEOPT_hdr(struct PEOPT_hdr* poh)
 {
 	if(poh->signature == 267)
+	{
 		printf("32 bit\n");
+		printf("Entry Point: %x\n", poh->address_entry_point);
+		printf("Number rva: %x\n", poh->number_rva_and_sizes);
+	}
 	else if (poh->signature == 523)
+	{
+		struct PEOPTx64_hdr* pohx64 = (struct PEOPTx64_hdr*) poh;
 		printf("64 bit\n");
+		printf("Entry Point: %x\n", pohx64->address_entry_point);
+		printf("Number rva: %x\n", pohx64->number_rva_and_sizes);
+	}
 	else
 	{
 		printf("ERROR: PEOPT header signature should be either 267 or 523, but is %d", poh->signature);
 		exit(-1);
 	}
-	printf("Entry Point: %x\n", poh->address_entry_point);
 }
