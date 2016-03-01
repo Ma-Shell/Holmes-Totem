@@ -9,7 +9,7 @@ typedef uint32_t DOS_hdr_long;
 
 struct DOS_hdr
 {
-	char signature[2];
+	union { char c[2]; uint16_t ui16; } signature;
 	DOS_hdr_short lastsize;
 	DOS_hdr_short nblocks;
 	DOS_hdr_short nrelocs;
@@ -36,7 +36,7 @@ typedef int16_t COFF_hdr_short;
 typedef uint32_t COFF_hdr_long;
 struct COFF_hdr
 {
-	char pe_signature[4];
+	union {	char c[4]; uint32_t ui32; } pe_signature;
 	COFF_hdr_short machine;
 	COFF_hdr_short number_sections;
 	COFF_hdr_long time_date_stamp;
@@ -68,7 +68,7 @@ struct PEOPT_hdr
 	PEOPT_long address_entry_point;
 	PEOPT_long base_code;
 	PEOPT_long base_data;
-	PEOPT_long image_base;
+	PEOPT_long base_image;
 	PEOPT_long section_alignment;
 	PEOPT_long file_alignment;
 	PEOPT_version os_version;
@@ -86,4 +86,46 @@ struct PEOPT_hdr
 	PEOPT_long size_heap_commit;
 	PEOPT_long loader_flags;
 	PEOPT_long number_rva_and_sizes;
+};
+
+void print_PEOPT_hdr(struct PEOPT_hdr* poh);
+
+typedef int16_t PEOPTx64_short;
+typedef int32_t PEOPTx64_long;
+typedef int64_t PEOPTx64_qlong;
+struct PEOPTx64_version
+{
+	PEOPTx64_short major;
+	PEOPTx64_short minor;
+};
+typedef struct PEOPTx64_version PEOPTx64_version;
+
+struct PEOPTx64_hdr
+{
+	PEOPTx64_short signature;
+	char linker_version_major;
+	char linker_version_minor;
+	PEOPTx64_long size_code;
+	PEOPTx64_long size_initialized_data;
+	PEOPTx64_long size_uinitialized_data;
+	PEOPTx64_long address_entry_point;
+	PEOPTx64_long base_code;
+	PEOPTx64_qlong base_image;
+	PEOPTx64_long section_alignment;
+	PEOPTx64_long file_alignment;
+	PEOPTx64_version os_version;
+	PEOPTx64_version img_version;
+	PEOPTx64_version subsystem_version;
+	PEOPTx64_long reserved;
+	PEOPTx64_long size_image;
+	PEOPTx64_long size_headers;
+	PEOPTx64_long checksum;
+	PEOPTx64_short subsystem;
+	PEOPTx64_short dll_characteristics;
+	PEOPTx64_qlong size_stack_reserve;
+	PEOPTx64_qlong size_stack_commit;
+	PEOPTx64_qlong size_heap_reserve;
+	PEOPTx64_qlong size_heap_commit;
+	PEOPTx64_long loader_flags;
+	PEOPTx64_long number_rva_and_sizes;
 };

@@ -6,7 +6,7 @@ void print_DOS_hdr(struct DOS_hdr* dh)
 	size_t i = 0;
 
 	printf("====== DOS ======\n");
-	printf("sig: %c%c\n", dh->signature[0], dh->signature[1]);
+	printf("sig: %.2s\n", dh->signature.c);
 	printf("lastsize: %hx\n", dh->lastsize);
 	printf("nblocks: %hx\n", dh->nblocks);
 	printf("nrelocs: %hx\n", dh->nrelocs);
@@ -39,7 +39,7 @@ void print_DOS_hdr(struct DOS_hdr* dh)
 void print_COFF_hdr(struct COFF_hdr* ch)
 {
 	printf("====== COFF ======\n");
-	printf("PE-signature: %c%c%c%c\n", ch->pe_signature[0], ch->pe_signature[1], ch->pe_signature[2], ch->pe_signature[3]);
+	printf("PE-signature: %.4s\n", ch->pe_signature.c);
 	printf("machine: %hx\n", ch->machine);
 	printf("number of sections: %hx\n", ch->number_sections);
 	time_t t = ch->time_date_stamp;
@@ -54,6 +54,20 @@ void print_COFF_hdr(struct COFF_hdr* ch)
 		printf("Non-relocatable\n");
 	if(ch->characteristics & COFF_CHARACTERISTICS_IS_DLL)
 		printf("Is a DLL\n");
-	//TODO
+	//TODO: characteristics
 	printf("===================\n");
+}
+
+void print_PEOPT_hdr(struct PEOPT_hdr* poh)
+{
+	if(poh->signature == 267)
+		printf("32 bit\n");
+	else if (poh->signature == 523)
+		printf("64 bit\n");
+	else
+	{
+		printf("ERROR: PEOPT header signature should be either 267 or 523, but is %d", poh->signature);
+		exit(-1);
+	}
+	printf("Entry Point: %x\n", poh->address_entry_point);
 }
