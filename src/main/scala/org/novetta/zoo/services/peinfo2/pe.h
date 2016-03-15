@@ -156,3 +156,17 @@ char* directory_entry_types[] =
 "IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR",
 "IMAGE_DIRECTORY_ENTRY_RESERVED"
 };
+
+struct IMAGE_SECTION_hdr
+{
+	char name[8];
+	union {	int32_t misc; uint32_t physical_address; uint32_t virtual_size; } misc;
+	int32_t virtualaddress;
+	int32_t size_raw_data;
+	int32_t pointer_raw_data;
+	int32_t pointer_relocations;
+	int32_t pointer_linenumbers;
+	int16_t numberRelocations;
+	int16_t number_lines;
+	int32_t characteristics;
+};
