@@ -2,7 +2,9 @@
 #pragma once
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include "constants.h"
+#include "list.h"
 
 typedef int16_t DOS_hdr_short;
 typedef uint16_t DOS_hdr_ptr;
@@ -161,12 +163,23 @@ struct IMAGE_SECTION_hdr
 {
 	char name[8];
 	union {	int32_t misc; uint32_t physical_address; uint32_t virtual_size; } misc;
-	int32_t virtualaddress;
-	int32_t size_raw_data;
-	int32_t pointer_raw_data;
-	int32_t pointer_relocations;
+	uint32_t virtualaddress;
+	uint32_t size_raw_data;
+	uint32_t pointer_raw_data;
+	uint32_t pointer_relocations;
 	int32_t pointer_linenumbers;
-	int16_t numberRelocations;
-	int16_t number_lines;
+	uint16_t numberRelocations;
+	uint16_t number_lines;
 	int32_t characteristics;
+};
+
+struct PE_file
+{
+	void* map;
+	size_t file_size;
+	struct DOS_hdr* dos;
+	struct COFF_hdr* coff;
+	union{ struct PEOPT_hdr* x32; struct PEOPTx64_hdr* x64; } peopt;
+	bool is_x64;
+	struct list warnings;
 };

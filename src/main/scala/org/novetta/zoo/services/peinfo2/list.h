@@ -1,3 +1,4 @@
+#pragma once
 struct list_elem
 {
 	void* data;
