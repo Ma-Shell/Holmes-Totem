@@ -139,33 +139,25 @@ struct PEOPT_data_directory
 	PEOPT_long size;
 };
 
-char* directory_entry_types[] = 
+struct DEBUG_DIRECTORY
 {
-"IMAGE_DIRECTORY_ENTRY_EXPORT", 
-"IMAGE_DIRECTORY_ENTRY_IMPORT",
-"IMAGE_DIRECTORY_ENTRY_RESOURCE",
-"IMAGE_DIRECTORY_ENTRY_EXCEPTION",
-"IMAGE_DIRECTORY_ENTRY_SECURITY",
-"IMAGE_DIRECTORY_ENTRY_BASERELOC",
-"IMAGE_DIRECTORY_ENTRY_DEBUG",
-"IMAGE_DIRECTORY_ENTRY_COPYRIGHT",
-"IMAGE_DIRECTORY_ENTRY_GLOBALPTR",
-"IMAGE_DIRECTORY_ENTRY_TLS",
-"IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG",
-"IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT",
-"IMAGE_DIRECTORY_ENTRY_IAT",
-"IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT",
-"IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR",
-"IMAGE_DIRECTORY_ENTRY_RESERVED"
+	uint32_t characteristics;
+	uint32_t time_date_stamp;
+	uint16_t major_version;
+	uint16_t minor_version;
+	uint32_t type;
+	uint32_t size_of_data;
+	uint32_t address_of_raw_data;
+	uint32_t pointer_to_raw_data;
 };
 
 struct IMAGE_SECTION_hdr
 {
 	char name[8];
 	union {	int32_t misc; uint32_t physical_address; uint32_t virtual_size; } misc;
-	uint32_t virtualaddress;
+	uint32_t virtual_address;
 	uint32_t size_raw_data;
-	uint32_t pointer_raw_data;
+	uint32_t pointer_to_raw_data;
 	uint32_t pointer_relocations;
 	int32_t pointer_linenumbers;
 	uint16_t numberRelocations;
@@ -173,13 +165,39 @@ struct IMAGE_SECTION_hdr
 	int32_t characteristics;
 };
 
+struct RICH_hdr_start
+{
+	uint32_t DanS;
+	uint32_t checksum[3];
+};
+
+struct RICH_hdr_entry
+{
+	union { uint32_t compid; uint32_t rich; };
+	uint32_t times_used;
+};
+
+struct RICH_hdr
+{
+	struct RICH_hdr_start* start;
+	struct RICH_hdr_entry* entries; // this is an array with length num_entries
+	uint16_t num_entries;
+};
+
 struct PE_file
 {
 	void* map;
 	size_t file_size;
+	uint32_t section_alignment;
+	uint32_t file_alignment;
 	struct DOS_hdr* dos;
 	struct COFF_hdr* coff;
 	union{ struct PEOPT_hdr* x32; struct PEOPTx64_hdr* x64; } peopt;
+	struct PEOPT_data_directory* data_directories[16];
+	struct DEBUG_DIRECTORY* debug_directories;
+	uint16_t num_debug_directories;
+	struct IMAGE_SECTION_hdr** sects;
+	struct RICH_hdr* rich;
 	bool is_x64;
 	struct list warnings;
 };
