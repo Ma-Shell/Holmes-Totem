@@ -151,6 +151,16 @@ struct DEBUG_DIRECTORY
 	uint32_t pointer_to_raw_data;
 };
 
+struct IMPORT_DESCRIPTOR
+{
+	//union { uint32_t original_first_thunk; uint32_t characteristics };
+	uint32_t original_first_thunk;
+	uint32_t time_date_stamp;
+	uint32_t forwarder_chain;
+	uint32_t name;
+	uint32_t first_thunk;
+};
+
 struct IMAGE_SECTION_hdr
 {
 	char name[8];
@@ -195,6 +205,7 @@ struct PE_file
 	union{ struct PEOPT_hdr* x32; struct PEOPTx64_hdr* x64; } peopt;
 	struct PEOPT_data_directory* data_directories[16];
 	struct DEBUG_DIRECTORY* debug_directories;
+	struct IMPORT_DESCRIPTOR* import_descriptor;
 	uint16_t num_debug_directories;
 	struct IMAGE_SECTION_hdr** sects;
 	struct RICH_hdr* rich;

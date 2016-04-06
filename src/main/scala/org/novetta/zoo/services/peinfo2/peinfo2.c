@@ -10,7 +10,7 @@
 #include "list.h"
 struct IMAGE_SECTION_hdr** parse_sections(void* offset, struct PE_file* pe);
 
-size_t max(size_t a, size_t b)
+int64_t max(int64_t a, int64_t b)
 {
 	if(a > b)
 		return a;
@@ -206,9 +206,47 @@ uint32_t get_offset_from_rva(struct PE_file* pe, uint32_t rva)
 
 		//TODO:
 		// raise PEFormatError, 'data at RVA can\'t be fetched. Corrupt header?'
-		exit(-1);
+		return 0;
+		//exit(-1);
 	}
 	return get_section_offset_from_rva(pe, s, rva);
+}
+
+/*
+Get data chunk from a section.
+
+Allows to query data from the section by passing the
+addresses where the PE file would be loaded by default.
+It is then possible to retrieve code and data by its real
+addresses as it would be if loaded.
+*/
+void* get_section_data(struct PE_file* pe, struct IMAGE_SECTION_hdr* s, uint32_t start)
+{
+	size_t pointer_to_raw_data_adj = adjust_file_alignment(pe, s->pointer_to_raw_data);
+	size_t virtual_address_adj = adjust_section_alignment(pe, s->virtual_address);
+
+	size_t offset;
+	if(!start)
+		offset = pointer_to_raw_data_adj;
+	else
+		offset = (start - virtual_address_adj) + pointer_to_raw_data_adj;
+	// PointerToRawData is not adjusted here as we might want to read any possible extra bytes
+	// that might get cut off by aligning the start (and hence cutting something off the end)
+	return pe->map + offset;
+}
+
+/*
+Get data regardless of the section where it lies on.
+*/
+void* get_data(struct PE_file* pe, uint32_t rva)
+{
+	struct IMAGE_SECTION_hdr* s = get_section_by_rva(pe, rva);
+	if(!s)
+	{
+		//TODO!!!
+		return NULL;
+	}
+	return get_section_data(pe, s, rva);
 }
 
 uint8_t get_directory_entry_index(const char* name)
@@ -223,10 +261,259 @@ uint8_t get_directory_entry_index(const char* name)
 	exit(-1);
 }
 
-void parse_import_directory(struct PE_file* pe, uint32_t virtual_address, uint32_t size)
+struct list* get_import_table(struct PE_file* pe, uint32_t rva, uint32_t max_length)
 {
-	// TODO!
-	printf("import: %08x, %08x\n", virtual_address, size);
+	struct list* table = calloc(sizeof(struct list*), 1);
+	// We need the ordinal flag for a simple heuristic
+	// we're implementing within the loop
+	uint64_t ordinal_flag;
+	uint8_t size;
+	if(pe->is_x64)
+	{
+		ordinal_flag = IMAGE_ORDINAL_FLAG64;
+		size = 8;
+	}
+	else
+	{
+		ordinal_flag = IMAGE_ORDINAL_FLAG;
+		size = 4;
+	}
+	uint32_t MAX_ADDRESS_SPREAD = 0x8000000; // 128*2**20 = 64 MB
+	uint8_t MAX_REPEATED_ADDRESS = 15;
+	uint8_t repeated_address = 0;
+	struct list addresses_of_data_set_64 = {NULL, NULL};
+	struct list addresses_of_data_set_32 = {NULL, NULL};
+	uint32_t start_rva = rva;
+	while(rva)
+	{
+		if(rva >= start_rva + max_length)
+		{
+			append_warning(pe, "Error parsing the import table. Entries go beyond bounds.");
+			break;
+		}
+		// if we see too many times the same entry we assume it could be
+		// a table containing bogus data (with malicious intent or otherwise)
+		if (repeated_address >= MAX_REPEATED_ADDRESS)
+		{
+			clear(table);
+			goto CLEANUP;
+		}
+
+		// if the addresses point somewhere but the difference between the highest
+		// and lowest address is larger than MAX_ADDRESS_SPREAD we assume a bogus
+		// table as the addresses should be contained within a module
+		if(list_extremum(&addresses_of_data_set_32, &comp_max) - list_extremum(&addresses_of_data_set_32, &comp_min) > MAX_ADDRESS_SPREAD)
+		{
+			clear(table);
+			goto CLEANUP;
+		}
+		if(list_extremum(&addresses_of_data_set_64, &comp_max) - list_extremum(&addresses_of_data_set_64, &comp_min) > MAX_ADDRESS_SPREAD)
+		{
+			clear(table);
+			goto CLEANUP;
+		}
+
+		uint64_t thunk_data;
+		bool failed = false;
+		if(pe->is_x64)
+		{
+			thunk_data = *((uint64_t*)get_data(pe, rva));
+		}
+		else
+		{
+			thunk_data = *((uint32_t*)get_data(pe, rva));
+		}
+		// Check if the AddressOfData lies within the range of RVAs that it's
+        // being scanned, abort if that is the case, as it is very unlikely
+        // to be legitimate data.
+        // Seen in PE with SHA256:
+        // 5945bb6f0ac879ddf61b1c284f3b8d20c06b228e75ae4f571fa87f5b9512902c
+		if((thunk_data >= start_rva) && (thunk_data <= rva))
+		{
+			append_warning(pe, "Error parsing the import table. AddressOfData overlaps with THUNK_DATA for THUNK at RVA 0x%x", rva);
+			break;
+		}
+		if(thunk_data != 0)
+		{
+			// If the entry looks like could be an ordinal...
+			if (thunk_data & ordinal_flag)
+			{
+				// but its value is beyond 2^16, we will assume it's a
+				// corrupted and ignore it altogether
+				if (thunk_data & 0x7fffffff > 0xffff)
+				{
+					clear(table);
+					goto CLEANUP;
+				}
+			} // and if it looks like it should be an RVA
+			else
+			{
+				// keep track of the RVAs seen and store them to study their
+				// properties. When certain non-standard features are detected
+				// the parsing will be aborted
+				if(list_contains(&addresses_of_data_set_32, thunk_data) ||
+				   list_contains(&addresses_of_data_set_64, thunk_data))
+				{
+					repeated_address += 1;
+				}
+				if(thunk_data >= 0x100000000) //(2^32)
+					append(&addresses_of_data_set_64, thunk_data);
+				else
+					append(&addresses_of_data_set_32, thunk_data);
+			}
+		}
+		else
+			break;
+
+		rva += size;
+		append(table, thunk_data);
+	}
+
+	CLEANUP:
+		clear(&addresses_of_data_set_32);
+		clear(&addresses_of_data_set_64);
+		return table;
+}
+
+uint16_t* get_word_from_data(void* data, uint32_t offset)
+{
+	return (uint16_t*) (data + (offset*2)); //TODO?
+}
+
+char* get_string_at_rva(struct PE_file* pe, uint32_t rva)
+{
+	if (!rva)
+		return NULL;
+	struct IMAGE_SECTION_hdr* s = get_section_by_rva(pe, rva);
+	if (!s)
+		return pe->map + rva;
+	
+	return get_section_data(pe, s, rva);
+}
+
+/*
+Parse the imported symbols.
+*/
+struct list* parse_imports(struct PE_file* pe, uint32_t original_first_thunk, uint32_t first_thunk, uint32_t forwarder_chain, uint32_t max_length)
+{
+	struct list* imported_symbols = calloc(sizeof(struct list*), 1);
+	// Import Lookup Table. Contains ordinals or pointers to strings.
+	struct list* ilt = get_import_table(pe, original_first_thunk, max_length);
+	// Import Address Table. May have identical content to ILT if
+	// PE file is not bounded, Will contain the address of the
+	// imported symbols once the binary is loaded or if it is already
+	// bound.
+	struct list* iat = get_import_table(pe, first_thunk, max_length);
+
+	// Would crash if IAT or ILT were NULL
+	if((!ilt || !(ilt->head)) && (!iat || !(iat->head)))
+	{
+		clear_and_delete_elements(imported_symbols);
+		goto CLEANUP;
+	}
+	struct list* table = NULL;
+	if(ilt)
+		table = ilt;
+	else if (iat)
+		table = iat;
+	else
+		return NULL; //TODO: cleanup?
+
+	uint8_t imp_offset = 4;
+	uint64_t address_mask = 0x7fffffff;
+	uint64_t ordinal_flag = IMAGE_ORDINAL_FLAG;
+	if(pe->is_x64)
+	{
+		imp_offset = 8;
+		address_mask = 0x7fffffffffffffff;
+		ordinal_flag = IMAGE_ORDINAL_FLAG64;
+	}
+	uint8_t num_invalid = 0;
+	uint8_t idx = 0;
+	bool import_by_ordinal;
+	struct list_elem* current = table->head;
+	uint64_t imp_ord;
+	uint16_t imp_hint;
+	uint64_t hint_name_table_rva;
+	uint32_t name_offset;
+	char* imp_name;
+	while(current)
+	{
+		imp_ord = NULL;
+		imp_hint = NULL;
+		imp_name = NULL;
+		name_offset = NULL;
+		hint_name_table_rva = NULL;
+		if(current->data)
+		{
+			// If imported by ordinal, we will append the ordinal number
+			if((uint64_t)current->data & ordinal_flag) //TODO...
+			{
+				import_by_ordinal = true;
+				imp_ord = (uint64_t)current->data & 0xffff; //TODO...
+			}
+			else
+			{
+				import_by_ordinal = false;
+				hint_name_table_rva = (uint64_t)current->data & address_mask; //TODO...
+				void* data = get_data(pe, hint_name_table_rva);
+				// Get the Hint
+				imp_hint = *get_word_from_data(data, 0);
+				imp_name = get_string_at_rva(pe, current->data+2);
+				/* TODO!!!
+				if(!is_valid_function_name(imp_name))
+					imp_name = "*invalid*";
+				*/
+				printf("%s\n", imp_name);
+				name_offset = get_offset_from_rva(pe, current->data+2);
+			}
+			//TODO!!! CONTINUE HERE!!!
+		}
+
+		current = current->next;
+	}
+
+	//TODO: clear and free ilt, iat, imported_symbols...
+	//TODO...
+	CLEANUP:
+		return imported_symbols;
+}
+
+/*
+Walk and parse the imiport directory.
+*/
+void parse_import_directory(struct PE_file* pe, uint32_t rva, uint32_t size)
+{
+	while(true)
+	{
+		// TODO! Check validity...
+		uint8_t error_count = 0;
+		uint32_t file_offset = get_offset_from_rva(pe, rva);
+		pe->import_descriptor = pe->map + file_offset;
+
+		// If the structure is all zeros, we reached the end of the list
+		if((pe->import_descriptor->original_first_thunk == 0) &&
+           (pe->import_descriptor->time_date_stamp == 0) &&
+           (pe->import_descriptor->forwarder_chain == 0) &&
+           (pe->import_descriptor->name == 0) &&
+           (pe->import_descriptor->first_thunk == 0))
+        {
+        	break;
+        }
+        printf("import name: %s\n", pe->map + get_offset_from_rva(pe, pe->import_descriptor->name));
+
+        rva += sizeof(struct IMPORT_DESCRIPTOR);
+
+        // If the array of thunk's is somewhere earlier than the import
+        // descriptor we can set a maximum length for the array. Otherwise
+        // just set a maximum length of the size of the file
+        uint32_t max_len = pe->file_size - file_offset;
+        if((rva > pe->import_descriptor->original_first_thunk) || (rva > pe->import_descriptor->first_thunk))
+        	max_len = max((int64_t)rva - pe->import_descriptor->original_first_thunk, (int64_t)rva - pe->import_descriptor->first_thunk);
+        parse_imports(pe, pe->import_descriptor->original_first_thunk, pe->import_descriptor->first_thunk, pe->import_descriptor->forwarder_chain, max_len);
+        //TODO...
+	}
+
 }
 
 /*
