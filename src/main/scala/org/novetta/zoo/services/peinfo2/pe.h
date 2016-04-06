@@ -161,6 +161,29 @@ struct IMPORT_DESCRIPTOR
 	uint32_t first_thunk;
 };
 
+struct IMPORT_DATA
+{
+	uint64_t address_of_data;
+	bool import_by_ordinal;
+	uint64_t ordinal;
+	uint32_t ordinal_offset;
+	uint16_t hint;
+	char* name;
+	uint32_t name_offset;
+	uint32_t bound;
+	uint32_t address;
+	uint32_t hint_name_table_rva;
+	uint32_t thunk_offset;
+	uint32_t thunk_rva;
+};
+
+struct IMPORT_DESC_DATA
+{
+	struct IMPORT_DESCRIPTOR* import_struct;
+	struct list* imports;
+	char* dll;
+};
+
 struct IMAGE_SECTION_hdr
 {
 	char name[8];
@@ -205,7 +228,6 @@ struct PE_file
 	union{ struct PEOPT_hdr* x32; struct PEOPTx64_hdr* x64; } peopt;
 	struct PEOPT_data_directory* data_directories[16];
 	struct DEBUG_DIRECTORY* debug_directories;
-	struct IMPORT_DESCRIPTOR* import_descriptor;
 	uint16_t num_debug_directories;
 	struct IMAGE_SECTION_hdr** sects;
 	struct RICH_hdr* rich;

@@ -206,6 +206,7 @@ uint32_t get_offset_from_rva(struct PE_file* pe, uint32_t rva)
 
 		//TODO:
 		// raise PEFormatError, 'data at RVA can\'t be fetched. Corrupt header?'
+		printf("ERROR, TODO (get_offset_from_rva\n");
 		return 0;
 		//exit(-1);
 	}
@@ -357,22 +358,22 @@ struct list* get_import_table(struct PE_file* pe, uint32_t rva, uint32_t max_len
 					repeated_address += 1;
 				}
 				if(thunk_data >= 0x100000000) //(2^32)
-					append(&addresses_of_data_set_64, thunk_data);
+					append_u64(&addresses_of_data_set_64, thunk_data);
 				else
-					append(&addresses_of_data_set_32, thunk_data);
+					append_u64(&addresses_of_data_set_32, thunk_data);
 			}
 		}
 		else
 			break;
 
 		rva += size;
-		append(table, thunk_data);
+		append_u64(table, thunk_data);
 	}
 
-	CLEANUP:
-		clear(&addresses_of_data_set_32);
-		clear(&addresses_of_data_set_64);
-		return table;
+CLEANUP:
+	clear(&addresses_of_data_set_32);
+	clear(&addresses_of_data_set_64);
+	return table;
 }
 
 uint16_t* get_word_from_data(void* data, uint32_t offset)
@@ -389,6 +390,18 @@ char* get_string_at_rva(struct PE_file* pe, uint32_t rva)
 		return pe->map + rva;
 	
 	return get_section_data(pe, s, rva);
+}
+
+bool is_valid_function_name(char* s)
+{
+	//TODO
+	return true;
+}
+
+bool is_valid_dos_filename(char* s)
+{
+	//TODO
+	return true;
 }
 
 /*
@@ -412,13 +425,17 @@ struct list* parse_imports(struct PE_file* pe, uint32_t original_first_thunk, ui
 		goto CLEANUP;
 	}
 	struct list* table = NULL;
-	if(ilt)
+	if(ilt && ilt->head)
 		table = ilt;
-	else if (iat)
+	else if (iat && iat->head)
 		table = iat;
 	else
 		return NULL; //TODO: cleanup?
-
+	struct list_elem* le = iat->head;
+	while(le)
+	{
+		le = le->next;
+	}
 	uint8_t imp_offset = 4;
 	uint64_t address_mask = 0x7fffffff;
 	uint64_t ordinal_flag = IMAGE_ORDINAL_FLAG;
@@ -432,106 +449,258 @@ struct list* parse_imports(struct PE_file* pe, uint32_t original_first_thunk, ui
 	uint8_t idx = 0;
 	bool import_by_ordinal;
 	struct list_elem* current = table->head;
+	struct list_elem* current_iat = iat->head;
+	struct list_elem* current_ilt = ilt->head;
 	uint64_t imp_ord;
 	uint16_t imp_hint;
 	uint64_t hint_name_table_rva;
 	uint32_t name_offset;
 	char* imp_name;
+	bool invalid;
 	while(current)
 	{
-		imp_ord = NULL;
-		imp_hint = NULL;
+		invalid = false;
+		imp_ord = 0;
+		imp_hint = 0;
 		imp_name = NULL;
-		name_offset = NULL;
-		hint_name_table_rva = NULL;
-		if(current->data)
+		name_offset = 0;
+		hint_name_table_rva = 0;
+		if(current->data.u64)
 		{
 			// If imported by ordinal, we will append the ordinal number
-			if((uint64_t)current->data & ordinal_flag) //TODO...
+			if(current->data.u64 & ordinal_flag) //TODO...
 			{
 				import_by_ordinal = true;
-				imp_ord = (uint64_t)current->data & 0xffff; //TODO...
+				imp_ord = current->data.u64 & 0xffff; //TODO...
 			}
 			else
 			{
 				import_by_ordinal = false;
-				hint_name_table_rva = (uint64_t)current->data & address_mask; //TODO...
+				hint_name_table_rva = current->data.u64 & address_mask; //TODO...
 				void* data = get_data(pe, hint_name_table_rva);
 				// Get the Hint
 				imp_hint = *get_word_from_data(data, 0);
-				imp_name = get_string_at_rva(pe, current->data+2);
-				/* TODO!!!
+				imp_name = get_string_at_rva(pe, current->data.u64+2);
 				if(!is_valid_function_name(imp_name))
+				{
+					invalid = true;
 					imp_name = "*invalid*";
-				*/
-				printf("%s\n", imp_name);
-				name_offset = get_offset_from_rva(pe, current->data+2);
-			}
-			//TODO!!! CONTINUE HERE!!!
-		}
+				}
 
+				printf("%s\n", imp_name);
+				name_offset = get_offset_from_rva(pe, current->data.u64+2);
+			}
+			// by nriva: we want the ThunkRVA and ThunkOffset
+			//TODO!!!
+		}
+		uint64_t imp_address;
+		if(pe->is_x64)
+			imp_address = first_thunk + pe->peopt.x32->base_image + idx * imp_offset;
+		else
+			imp_address = first_thunk + pe->peopt.x64->base_image + idx * imp_offset;
+
+		uint64_t imp_bound;
+		if(iat && ilt && current_ilt && current_iat && current_ilt->data.u64 != current_iat->data.u64)
+			imp_bound = current_iat->data.u64;
+		else
+			imp_bound = 0;
+
+		// The file with hashes:
+		//
+        // MD5: bfe97192e8107d52dd7b4010d12b2924
+        // SHA256: 3d22f8b001423cb460811ab4f4789f277b35838d45c62ec0454c877e7c82c7f5
+        //
+        // has an invalid table built in a way that it's parseable but contains invalid
+        // entries that lead pefile to take extremely long amounts of time to
+        // parse. It also leads to extreme memory consumption.
+        // To prevent similar cases, if invalid entries are found in the middle of a
+        // table the parsing will be aborted
+  
+  		if(!imp_ord && !imp_name)
+  		{
+  			printf("PEFormatError: Invalid entries, aborting parsing.\n");
+  			goto CLEANUP;
+  			//TODO
+  		}
+        // Some PEs appear to interleave valid and invalid imports. Instead of
+        // aborting the parsing altogether we will simply skip the invalid entries.
+        // Although if we see 1000 invalid entries and no legit ones, we abort.
+  		if(invalid)
+  		{
+  			if((num_invalid > 1000) && (num_invalid == idx))
+  			{
+  				printf("PEFormatError: Too many invalid names, aborting parsing.\n");
+  				goto CLEANUP;
+  				//TODO
+  			}
+  			num_invalid += 1;
+  			goto CONTINUE;
+  		}
+  		if(strcmp(imp_name, "") && (imp_ord || imp_name))
+  		{
+  			struct IMPORT_DATA* id = malloc(sizeof(struct IMPORT_DATA));
+  			id->address_of_data = current->data.u64;
+  			id->import_by_ordinal = import_by_ordinal;
+  			id->ordinal = imp_ord;
+  			//id->ordinal_offset = TODO!
+  			id->hint = imp_hint;
+  			id->name = imp_name;
+  			id->name_offset = name_offset;
+  			id->bound = imp_bound;
+  			id->address = imp_address;
+  			id->hint_name_table_rva = hint_name_table_rva;
+  			//id->thunk_offset = thunk_offset; TODO!
+  			//id->thunk_rva = thunk_rva; TODO!
+  			append(imported_symbols, id);
+  		}
+
+CONTINUE:
+		if(current_iat)
+			current_iat = current_iat->next;
+		if(current_ilt)
+			current_ilt = current_ilt->next;
 		current = current->next;
+		idx++;
 	}
 
-	//TODO: clear and free ilt, iat, imported_symbols...
-	//TODO...
-	CLEANUP:
-		return imported_symbols;
+CLEANUP:
+	clear(iat);
+	clear(ilt);
+	free(iat);
+	free(ilt);
+	return imported_symbols;
+}
+
+bool starts_with(char* str, char* pre)
+{
+	size_t len1 = strlen(str);
+	size_t len2 = strlen(pre);
+	if(len1 < len2)
+		return false;
+	else
+		return strncmp(str, pre, len2) == 0;
 }
 
 /*
 Walk and parse the imiport directory.
 */
-void parse_import_directory(struct PE_file* pe, uint32_t rva, uint32_t size)
+void* parse_import_directory(struct PE_file* pe, uint32_t rva, uint32_t size)
 {
+	struct list* import_descs = calloc(sizeof(struct list),1);
+	struct IMPORT_DESCRIPTOR* import_desc;
 	while(true)
 	{
 		// TODO! Check validity...
 		uint8_t error_count = 0;
 		uint32_t file_offset = get_offset_from_rva(pe, rva);
-		pe->import_descriptor = pe->map + file_offset;
+		import_desc = pe->map + file_offset;
 
 		// If the structure is all zeros, we reached the end of the list
-		if((pe->import_descriptor->original_first_thunk == 0) &&
-           (pe->import_descriptor->time_date_stamp == 0) &&
-           (pe->import_descriptor->forwarder_chain == 0) &&
-           (pe->import_descriptor->name == 0) &&
-           (pe->import_descriptor->first_thunk == 0))
+		if((import_desc->original_first_thunk == 0) &&
+           (import_desc->time_date_stamp == 0) &&
+           (import_desc->forwarder_chain == 0) &&
+           (import_desc->name == 0) &&
+           (import_desc->first_thunk == 0))
         {
         	break;
         }
-        printf("import name: %s\n", pe->map + get_offset_from_rva(pe, pe->import_descriptor->name));
-
+        printf("import name: %s\n", pe->map + get_offset_from_rva(pe, import_desc->name));
         rva += sizeof(struct IMPORT_DESCRIPTOR);
 
         // If the array of thunk's is somewhere earlier than the import
         // descriptor we can set a maximum length for the array. Otherwise
         // just set a maximum length of the size of the file
         uint32_t max_len = pe->file_size - file_offset;
-        if((rva > pe->import_descriptor->original_first_thunk) || (rva > pe->import_descriptor->first_thunk))
-        	max_len = max((int64_t)rva - pe->import_descriptor->original_first_thunk, (int64_t)rva - pe->import_descriptor->first_thunk);
-        parse_imports(pe, pe->import_descriptor->original_first_thunk, pe->import_descriptor->first_thunk, pe->import_descriptor->forwarder_chain, max_len);
+        if((rva > import_desc->original_first_thunk) || (rva > import_desc->first_thunk))
+        	max_len = max((int64_t)rva - import_desc->original_first_thunk, (int64_t)rva - import_desc->first_thunk);
+        struct list* import_data = parse_imports(pe, import_desc->original_first_thunk, import_desc->first_thunk, import_desc->forwarder_chain, max_len);
         //TODO...
+
+        if(error_count > 5)
+        {
+        	append_warning(pe, "Too may errors parsing the import directory. Invalid import data at RVA: 0x%x", rva);
+        	break;
+        }
+        if(!import_data)
+        {
+        	error_count++;
+        	continue;
+        }
+
+        char* dll = get_string_at_rva(pe, import_desc->name);
+        if(!is_valid_dos_filename(dll))
+        {
+        	dll = "*invalid*";
+        }
+        if(dll)
+        {
+        	struct list_elem* symbol_entry = import_data->head;
+        	while(symbol_entry)
+        	{
+        		struct IMPORT_DATA* symbol = (struct IMPORT_DATA*)symbol_entry->data.ptr;
+        		if(!symbol->name)
+        		{
+        			//TODO:
+        			char* funcname = "";//ord_lookup(dll.lower(), symbol->data.ptr->ordinal);
+        			if(funcname)
+        				symbol->name = funcname;
+        		}
+        		symbol_entry = symbol_entry->next;
+        	}
+        	struct IMPORT_DESC_DATA* idd = malloc(sizeof(struct IMPORT_DESC_DATA));
+        	idd->import_struct = import_desc;
+        	idd->imports = import_data;
+        	idd->dll = dll;
+        	append(import_descs, idd);
+        }
+	}
+	uint8_t suspicious_imports_count = 0;
+	uint8_t total_symbols = 0;
+	struct list_elem* imp_dll = import_descs->head;
+	while(imp_dll)
+	{
+		struct list_elem* symbol_elem = ((struct IMPORT_DESC_DATA*)imp_dll->data.ptr)->imports->head;		
+		while(symbol_elem)
+		{
+			struct IMPORT_DATA* symbol = (struct IMPORT_DATA*)symbol_elem->data.ptr;
+			if(symbol && symbol->name)
+			{
+				if(starts_with(symbol->name, "LoadLibrary") ||
+				   starts_with(symbol->name, "GetProcAddress"))
+				{
+					suspicious_imports_count += 1;
+				}
+				//printf(">>> %s\n", symbol->name);
+				total_symbols += 1;
+			}
+			symbol_elem = symbol_elem->next;
+		}
+		imp_dll = imp_dll->next;
 	}
 
+	if((suspicious_imports_count == 2) && total_symbols < 20)
+	{
+		append_warning(pe, "Imported symbols contain entries typical of packed executables.");
+	}
+	return import_descs;
 }
 
 /*
 Parse the export directory.
 Given the RVA of the export directory, it will process all its entries.
 */
-void parse_export_directory(struct PE_file* pe, uint32_t rva, uint32_t size)
+void* parse_export_directory(struct PE_file* pe, uint32_t rva, uint32_t size)
 {
 	// TODO!
 
 }
 
-void parse_resources_directory()
+void* parse_resources_directory()
 {
 	//TODO!
 }
 
-void parse_debug_directory(struct PE_file* pe, uint32_t rva, uint32_t size)
+void* parse_debug_directory(struct PE_file* pe, uint32_t rva, uint32_t size)
 {
 	pe->num_debug_directories = size/sizeof(struct DEBUG_DIRECTORY);
 	pe->debug_directories = pe->map + get_offset_from_rva(pe, rva);
@@ -540,27 +709,27 @@ void parse_debug_directory(struct PE_file* pe, uint32_t rva, uint32_t size)
 	printf("%08x\n", pe->debug_directories[0].pointer_to_raw_data);
 }
 
-void parse_relocations_directory()
+void* parse_relocations_directory()
 {
 	//TODO!
 }
 
-void parse_directory_tls()
+void* parse_directory_tls()
 {
 	//TODO!
 }
 
-void parse_directory_load_config()
+void* parse_directory_load_config()
 {
 	//TODO!
 }
 
-void parse_delay_import_directory()
+void* parse_delay_import_directory()
 {
 	//TODO!
 }
 
-void parse_directory_bound_imports()
+void* parse_directory_bound_imports()
 {
 	//TODO!
 }
@@ -578,7 +747,7 @@ void parse_data_directories(struct PE_file* pe)
         "IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG", "IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT",
         "IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT"
     };
-    void (*directory_parsing_functions[])() = 
+    void* (*directory_parsing_functions[])() = 
     {
     	&parse_import_directory, &parse_export_directory,
     	&parse_resources_directory, &parse_debug_directory,
