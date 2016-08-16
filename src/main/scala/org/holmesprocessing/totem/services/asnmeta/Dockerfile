@@ -12,7 +12,6 @@ RUN pip3 install tornado dnspython3
 RUN mkdir -p /service
 ADD gatherasn.py /service
 ADD asnmeta.py /service
-ADD service.conf /service
 
 
 # create a new user with limited access
@@ -25,4 +24,9 @@ WORKDIR /service
 
 
 EXPOSE 7730
+
+# add the configuration file (possibly from a storage uri)
+ARG conf=service.conf
+ADD $conf /service/service.conf
+
 CMD ["python3", "/service/asnmeta.py"]
