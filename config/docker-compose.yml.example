@@ -1,47 +1,67 @@
-objdump:
-  build: ../src/main/scala/org/holmesprocessing/totem/services/objdump
-  ports:
-    - "7730:8080"
-  restart: unless-stopped
-  volumes:
-    - /tmp:/tmp:ro
+version: '2'
+services:
+  objdump:
+    build:
+      context: ../src/main/scala/org/holmesprocessing/totem/services/objdump
+      args:
+        conf: ${CONFSTORAGE_OBJDUMP}service.conf
+    ports:
+      - "7730:8080"
+    restart: unless-stopped
+    volumes:
+      - /tmp:/tmp:ro
 
-peid:
-  build: ../src/main/scala/org/holmesprocessing/totem/services/peid
-  ports:
-    - "7720:8080"
-  restart: unless-stopped
-  volumes:
-    - /tmp:/tmp:ro
+  peid:
+    build:
+      context: ../src/main/scala/org/holmesprocessing/totem/services/peid
+      args:
+        conf: ${CONFSTORAGE_PEID}service.conf
+    ports:
+      - "7720:8080"
+    restart: unless-stopped
+    volumes:
+      - /tmp:/tmp:ro
 
-peinfo:
-  build: ../src/main/scala/org/holmesprocessing/totem/services/peinfo
-  ports:
-    - "7705:8080"
-  restart: unless-stopped
-  volumes:
-    - /tmp:/tmp:ro
+  peinfo:
+    build:
+      context: ../src/main/scala/org/holmesprocessing/totem/services/peinfo
+      args:
+        conf: ${CONFSTORAGE_PEINFO}service.conf
+    ports:
+      - "7705:8080"
+    restart: unless-stopped
+    volumes:
+      - /tmp:/tmp:ro
 
-virustotal:
-  build: ../src/main/scala/org/holmesprocessing/totem/services/virustotal
-  ports:
-    - "7710:8080"
-  restart: unless-stopped
-  volumes:
-   - /tmp:/tmp:ro
+  virustotal:
+    build:
+      context: ../src/main/scala/org/holmesprocessing/totem/services/virustotal
+      args:
+        conf: ${CONFSTORAGE_VIRUSTOTAL}service.conf
+    ports:
+      - "7710:8080"
+    restart: unless-stopped
+    volumes:
+     - /tmp:/tmp:ro
 
-yara:
-  build: ../src/main/scala/org/holmesprocessing/totem/services/yara
-  ports:
-    - "7701:8080"
-  restart: unless-stopped
-  volumes:
-   - /tmp:/tmp:ro
+  yara:
+    build:
+      context: ../src/main/scala/org/holmesprocessing/totem/services/yara
+      args:
+        conf: ${CONFSTORAGE_YARA}service.conf
+    ports:
+      - "7701:8080"
+    restart: unless-stopped
+    volumes:
+     - /tmp:/tmp:ro
 
-zipmeta:
-  build: ../src/main/scala/org/holmesprocessing/totem/services/zipmeta
-  ports:
-    - "7715:8080"
-  restart: unless-stopped
-  volumes:
-   - /tmp:/tmp:ro
+  zipmeta:
+    build: 
+      context: ../src/main/scala/org/holmesprocessing/totem/services/zipmeta
+      args:
+        conf: ${CONFSTORAGE_ZIPMETA}service.conf
+    ports:
+      - "7715:8080"
+    restart: unless-stopped
+    volumes:
+     - /tmp:/tmp:ro
